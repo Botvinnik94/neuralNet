@@ -25,10 +25,11 @@ namespace NeuralNetwork3
 
             Console.WriteLine();
 
-            for (int i = 0; i < 1; i++)
+            for (int i = 0; i < 5; i++)
             {
                 nn.Train(trainingInputs, expectedOutputs);
                 Console.WriteLine("w1 = " + nn.Synapses[0][0][0] + "\tw2 = " + nn.Synapses[1][0][0]);
+                Console.WriteLine("b1 = " + nn.Biases[0][0] + "\tb2 = " + nn.Biases[1][0]);
             }
 
             Console.WriteLine("========================");

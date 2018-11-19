@@ -34,6 +34,7 @@ namespace NeuralNetwork3
 
         double[][][] _synapses; //[layer] [input neuron] [output neuron]
         double[][] _neurons; //[layer] [neuron]
+        double[][] _biases; //[layer] [neuron]
 
         public double[][][] Synapses
         {
@@ -51,15 +52,28 @@ namespace NeuralNetwork3
             }
         }
 
+        public double[][] Biases
+        {
+            get
+            {
+                return _biases;
+            }
+        }
+
         public NeuralNetwork(int[] neuronDistribution, double learningRate) //index = layer ; value = number of neurons ;
         {
             LearningRate = learningRate;
             _neurons = new double[neuronDistribution.Length][];
             _synapses = new double[neuronDistribution.Length - 1][][];
+            _biases = new double[neuronDistribution.Length - 1][];
 
             for (int i = 0; i < neuronDistribution.Length; i++)
             {
                 _neurons[i] = new double[neuronDistribution[i]];
+                if(i != 0)
+                {
+                    _biases[i - 1] = new double[neuronDistribution[i]];
+                }                
 
                 if (i != neuronDistribution.Length - 1)
                 {
@@ -93,6 +107,7 @@ namespace NeuralNetwork3
                         total += _neurons[i - 1][axon] * _synapses[i - 1][axon][j];
                     }
 
+                    total += _biases[i - 1][j];
                     _neurons[i][j] = Sigmoid(total);
                 }
             }
@@ -151,6 +166,8 @@ namespace NeuralNetwork3
                     {
                         _synapses[layer][neuron][axon] += _learningRate * allDeltas[layer][axon] * _neurons[layer][neuron];
                     }
+
+                    _biases[layer][neuron] += _learningRate * allDeltas[layer][neuron];
                 }
             }
         }
