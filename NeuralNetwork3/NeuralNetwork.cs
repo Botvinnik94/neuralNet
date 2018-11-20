@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -83,11 +84,126 @@ namespace NeuralNetwork3
                         _synapses[i][j] = new double[neuronDistribution[i + 1]];
                         for (int axon = 0; axon < _synapses[i][j].Length; axon++)
                         {
-                            _synapses[i][j][axon] = RandomSeed.Instance.rand.NextDouble();
+                            _synapses[i][j][axon] = RandomSeed.Instance.rand.NextDouble() * RandomSeed.Instance.rand.Next(-1, 2);
                         }
                     }
                 }
             }
+        }
+
+        public void SaveBrain()
+        {
+            FileStream file = File.OpenWrite(DateTime.Now.Day.ToString() + 
+                                             DateTime.Now.Hour.ToString() + 
+                                             DateTime.Now.Minute.ToString() + 
+                                             DateTime.Now.Second.ToString() + 
+                                             "_neuralNet.txt");
+            StreamWriter sw = new StreamWriter(file);
+
+            sw.WriteLine("BEGIN SYNAPSES");
+            for (int layer = 0; layer < _synapses.Length; layer++)
+            {
+                for(int neuron = 0; neuron < _synapses[layer].Length; neuron++)
+                {
+                    for(int axon = 0; axon < _synapses[layer][neuron].Length; axon++)
+                    {
+                        sw.Write(_synapses[layer][neuron][axon].ToString());
+                        if(axon != _synapses[layer][neuron].Length - 1 || neuron != _synapses[layer].Length - 1)
+                        {
+                            sw.Write(";");
+                        }
+                    }
+                }
+                sw.WriteLine();
+            }
+
+            sw.WriteLine("BEGIN BIASES");
+            for(int layer = 0; layer < _biases.Length; layer++)
+            {
+                for(int neuron = 0; neuron < _biases[layer].Length; neuron++)
+                {
+                    sw.Write(_biases[layer][neuron].ToString());
+                    if(neuron != _biases[layer].Length - 1)
+                    {
+                        sw.Write(";");
+                    }
+                }
+                sw.WriteLine();
+            }
+
+            sw.Close();
+        }
+
+        public bool LoadBrain(string path)
+        {
+            int state = 0;
+            int layer = 0;
+            string[] allLines;
+
+            try
+            {
+                allLines = File.ReadAllLines(path);
+            }
+            catch(IOException)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < allLines.Length; i++)
+            {
+                if(allLines[i].Contains("BEGIN SYNAPSES"))
+                {
+                    state = 1;
+                    layer = 0;
+                }
+                else if(allLines[i].Contains("BEGIN BIASES"))
+                {
+                    state = 2;
+                    layer = 0;
+                }
+                else
+                {
+                    switch (state)
+                    {
+                        case 0:
+                            break;
+                        case 1:
+                            string[] rawAxons = allLines[i].Split(';');
+                            int neuron = 0;
+                            int indexAxon = 0;
+                            for(int axon = 0; axon < rawAxons.Length; axon++)
+                            {
+                                if(indexAxon == _synapses[layer].Length)
+                                {
+                                    neuron++;
+                                    indexAxon = 0;
+                                }
+                                try
+                                {
+                                    _synapses[layer][neuron][indexAxon] = Convert.ToDouble(rawAxons[axon]);
+                                }
+                                catch (FormatException) { }
+                                indexAxon++;
+                            }
+                            layer++;
+                            break;
+                        case 2:
+                            string[] rawBiases = allLines[i].Split(';');
+                            for(int bias = 0; bias < rawBiases.Length; bias++)
+                            {
+                                try
+                                {
+                                    _biases[layer][bias] = Convert.ToDouble(rawBiases[bias]);
+                                }
+                                catch (FormatException) { }
+                            }
+                            layer++;
+                            break;
+                    }
+                }
+            }
+
+            return true;
         }
 
         public double[] Think(double[] inputs)
@@ -97,18 +213,22 @@ namespace NeuralNetwork3
                 _neurons[0][i] = inputs[i];
             }
 
-            for (int i = 1; i < _neurons.Length; i++)
+            for (int layer = 1; layer < _neurons.Length; layer++)
             {
-                for (int j = 0; j < _neurons[i].Length; j++)
+                for (int neuron = 0; neuron < _neurons[layer].Length; neuron++)
                 {
                     double total = 0;
-                    for (int axon = 0; axon < _synapses[i - 1][j].Length; axon++)
+                    //for (int axon = 0; axon < _synapses[layer - 1][neuron].Length; axon++)
+                    //{
+                    //    total += _neurons[layer - 1][axon] * _synapses[layer - 1][axon][neuron];
+                    //}
+                    for(int prevAxon = 0; prevAxon < _synapses[layer - 1].Length; prevAxon++)
                     {
-                        total += _neurons[i - 1][axon] * _synapses[i - 1][axon][j];
+                        total += _neurons[layer - 1][prevAxon] * _synapses[layer - 1][prevAxon][neuron];
                     }
 
-                    total += _biases[i - 1][j];
-                    _neurons[i][j] = Sigmoid(total);
+                    total += _biases[layer - 1][neuron];
+                    _neurons[layer][neuron] = Sigmoid(total);
                 }
             }
 
@@ -156,8 +276,16 @@ namespace NeuralNetwork3
             }
         }
 
-        private void UpdateWeights(double[][] allDeltas)
+        private void UpdateWeightsAndBiases(double[][] allDeltas)
         {
+            for (int layer = 0; layer < _biases.Length; layer++)
+            {
+                for(int neuron = 0; neuron < _biases[layer].Length; neuron++)
+                {
+                    _biases[layer][neuron] += _learningRate * allDeltas[layer][neuron];
+                }
+            }
+
             for (int layer = 0; layer < _synapses.Length; layer++)
             {
                 for (int neuron = 0; neuron < _synapses[layer].Length; neuron++)
@@ -166,24 +294,45 @@ namespace NeuralNetwork3
                     {
                         _synapses[layer][neuron][axon] += _learningRate * allDeltas[layer][axon] * _neurons[layer][neuron];
                     }
-
-                    _biases[layer][neuron] += _learningRate * allDeltas[layer][neuron];
                 }
             }
         }
 
-        public void Train(double[][] trainingInputs, double[][] trainingExpectedOutputs)
+        public int Train(double[][] trainingInputs, double[][] trainingExpectedOutputs, int maxEpochs, int batchPerEpoch, double minError)
         {
-            for (int i = 0; i < trainingInputs.Length; i++)
+            int i = 0;
+            int iterations = 1;
+            int epoch = 1;
+            int epochIteration = 1;
+            double error = 0.0;
+
+            while (true)
             {
-                //double sumError = 0.0;
                 double[] outputs = Think(trainingInputs[i]);
-                //for(int j = 0; j < outputs.Length; j++)
-                //{
-                //    sumError += Math.Pow((trainingExpectedOutputs[i][j] - outputs[j]), 2);
-                //}
+
+                for(int j = 0; j < outputs.Length; j++)
+                {
+                    error += Math.Pow((trainingExpectedOutputs[i][j] - outputs[j]), 2); 
+                }
+
+                if(epochIteration == batchPerEpoch)
+                {
+                    if (minError > (error / batchPerEpoch))
+                        return iterations;
+
+                    epochIteration = 0;
+                    error = 0;
+                    ++epoch;
+                    if (epoch > maxEpochs)
+                        return iterations;
+                }              
+
                 double[][] desiredChanges = PropagateError(trainingExpectedOutputs[i], outputs);
-                UpdateWeights(desiredChanges);
+                UpdateWeightsAndBiases(desiredChanges);
+
+                ++epochIteration;
+                ++iterations;
+                if (++i >= trainingInputs.Length) i = 0;
             }
         }
 
